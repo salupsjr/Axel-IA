@@ -13,7 +13,6 @@ TOOLS_SCHEMA = [
     {"type": "function", "function": {"name": "get_project_tree", "description": "Lista os arquivos do projeto.", "parameters": {"type": "object", "properties": {"relative_path": {"type": "string", "default": "."}}}}},
     {"type": "function", "function": {"name": "read_file", "description": "Lê o conteúdo de um arquivo.", "parameters": {"type": "object", "properties": {"relative_path": {"type": "string"}}, "required": ["relative_path"]}}},
     {"type": "function", "function": {"name": "write_file", "description": "Escreve código em um arquivo.", "parameters": {"type": "object", "properties": {"relative_path": {"type": "string"}, "content": {"type": "string"}}, "required": ["relative_path", "content"]}}},
-    # AQUI ESTÁ A MÁGICA: Adicionamos o parâmetro "justificativa" obrigatório
     {"type": "function", "function": {"name": "run_command", "description": "Executa comandos no terminal.", "parameters": {"type": "object", "properties": {"command": {"type": "string"}, "justificativa": {"type": "string", "description": "Explique para o usuário de forma clara o que este comando faz e por que precisa rodá-lo"}}, "required": ["command", "justificativa"]}}},
     {"type": "function", "function": {"name": "gerar_imagem", "description": "Gera uma imagem por IA e salva no projeto.", "parameters": {"type": "object", "properties": {"prompt": {"type": "string", "description": "Descrição da imagem"}, "nome_arquivo": {"type": "string"}}, "required": ["prompt", "nome_arquivo"]}}}
 ]
@@ -92,11 +91,22 @@ class BionicAgent:
                 fn_args = json.loads(tool_call.function.arguments)
                 
                 if fn_name == "run_command":
-                    pendente_command = {
-                        "tool_call_id": tool_call.id, 
-                        "command": fn_args.get("command"),
-                        "justificativa": fn_args.get("justificativa", "Executando comando no sistema") # Captura a explicação
-                    }
+                    cmd_string = fn_args.get("command", "")
+                    justificativa = fn_args.get("justificativa", "Executando comando no sistema")
+                    
+                    # AVALIAÇÃO DO FILTRO DE RISCO
+                    if self.terminal.is_safe_command(cmd_string):
+                        # É um comando inofensivo. Executa em background sem travar a interface!
+                        resultado = self.terminal.execute(cmd_string)
+                        ferramentas_usadas.append(f"run_command ({cmd_string}) [Auto-Aprovado]")
+                        self.history.append({"role": "tool", "tool_call_id": tool_call.id, "name": fn_name, "content": str(resultado)})
+                    else:
+                        # É destrutivo ou desconhecido. Manda para aprovação humana (laranja).
+                        pendente_command = {
+                            "tool_call_id": tool_call.id, 
+                            "command": cmd_string,
+                            "justificativa": justificativa
+                        }
                 else:
                     resultado = self._execute_tool(fn_name, fn_args)
                     ferramentas_usadas.append(f"{fn_name}")
@@ -116,7 +126,7 @@ class BionicAgent:
         if aprovado:
             resultado = self.terminal.execute(command)
         else:
-            resultado = "Acesso negado: O usuário bloqueou a execução deste comando na interface por motivos de segurança."
+            resultado = "Acesso negado: O utilizador bloqueou a execução deste comando na interface por motivos de segurança."
 
         self.history.append({
             "role": "tool",

@@ -1,6 +1,8 @@
 import os
 import PyPDF2
 import pandas as pd
+import shutil
+from datetime import datetime
 
 class SecureWorkspace:
     def __init__(self, workspace_dir: str):
@@ -15,6 +17,10 @@ class SecureWorkspace:
         
         tree = []
         for root, dirs, files in os.walk(base_path):
+            # Oculta a pasta de backups da IA para ela não ler lixo
+            if ".bionic_backup" in root:
+                continue
+                
             level = root.replace(base_path, '').count(os.sep)
             indent = ' ' * 4 * (level)
             tree.append(f"{indent}{os.path.basename(root)}/")
@@ -31,7 +37,6 @@ class SecureWorkspace:
         extensao = caminho.lower().split('.')[-1]
         
         try:
-            # Novo superpoder: Ler PDFs
             if extensao == 'pdf':
                 texto = ""
                 with open(caminho, 'rb') as f:
@@ -39,19 +44,13 @@ class SecureWorkspace:
                     for pagina in leitor.pages:
                         extraido = pagina.extract_text()
                         if extraido: texto += extraido + "\n"
-                return texto if texto.strip() else "PDF lido, mas nenhum texto detectável encontrado (pode ser uma imagem escaneada)."
-                
-            # Novo superpoder: Ler Planilhas (CSV e Excel)
+                return texto if texto.strip() else "PDF lido, mas nenhum texto detectável encontrado."
             elif extensao in ['csv']:
                 df = pd.read_csv(caminho)
-                # Retornamos as 100 primeiras linhas para não estourar a memória da IA
                 return f"Planilha CSV (Amostra das 100 primeiras linhas):\n{df.head(100).to_string()}"
-                
             elif extensao in ['xlsx', 'xls']:
                 df = pd.read_excel(caminho)
                 return f"Planilha Excel (Amostra das 100 primeiras linhas):\n{df.head(100).to_string()}"
-                
-            # Leitura de arquivos de código/texto padrão
             else:
                 with open(caminho, 'r', encoding='utf-8') as f:
                     return f.read()
@@ -61,9 +60,25 @@ class SecureWorkspace:
     def write_file(self, relative_path: str, content: str) -> str:
         caminho = os.path.join(self.workspace_dir, relative_path)
         os.makedirs(os.path.dirname(caminho) or '.', exist_ok=True)
+        
+        # --- A MÁQUINA DO TEMPO (CHECKPOINT BIONIC) ---
+        if os.path.exists(caminho):
+            backup_dir = os.path.join(self.workspace_dir, ".bionic_backup")
+            os.makedirs(backup_dir, exist_ok=True)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            nome_arquivo = os.path.basename(caminho)
+            backup_path = os.path.join(backup_dir, f"{timestamp}_{nome_arquivo}")
+            
+            try:
+                shutil.copy2(caminho, backup_path) # Copia o original antes de sobrescrever
+            except Exception:
+                pass # Falha silenciosa no backup para não travar a ação
+        # ----------------------------------------------
+
         try:
             with open(caminho, 'w', encoding='utf-8') as f:
                 f.write(content)
-            return f"Arquivo '{relative_path}' salvo com sucesso!"
+            return f"Arquivo '{relative_path}' atualizado com sucesso! (Checkpoint anterior salvo em segurança)."
         except Exception as e:
             return f"Erro ao escrever arquivo: {str(e)}"
