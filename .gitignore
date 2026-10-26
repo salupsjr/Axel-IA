@@ -1,0 +1,17 @@
+# Arquivos de ambiente e senhas (MUITO IMPORTANTE)
+.env
+
+# Ambientes virtuais
+venv/
+env/
+
+# Arquivos de cache do Python
+__pycache__/
+*.pyc
+
+# Bancos de dados e logs locais
+chats.json
+
+# (Opcional) Ignorar o que a IA gerar na pasta workspace, mantendo apenas a pasta vazia
+workspace/*
+!workspace/.gitkeep
