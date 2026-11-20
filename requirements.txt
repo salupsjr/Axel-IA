@@ -1,0 +1,24 @@
+# Backend & API
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.0.0
+python-multipart>=0.0.9
+python-dotenv>=1.0.0
+
+# IA & Modelos
+openai>=1.50.0
+requests>=2.32.0
+
+# Áudio, Voz & Transcrição
+faster-whisper>=1.0.0
+edge-tts>=6.1.0
+pyttsx3>=2.90
+soundfile>=0.12.1
+numpy>=1.26.0
+
+# Telemetria & Terminal
+psutil>=6.0.0
+rich>=13.7.0
+
+# Dependência específica para voz offline no Windows
+pywin32>=306; sys_platform == "win32"

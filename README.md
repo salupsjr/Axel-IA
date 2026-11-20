@@ -1,22 +1,66 @@
-# 🐶 Caramelo.IA - Agente Autônomo Multi-IA
+# 🧠 AXEL // 3D Command Center
 
-Um sistema de Inteligência Artificial autônomo construído em Python, capaz de escrever código, manipular arquivos e interagir com o sistema operacional de forma segura através de uma interface web.
+O **AXEL** é um assistente de Inteligência Artificial autônomo, híbrido (Online/Offline) e blindado (AppSec), equipado com interface HUD 3D interativa, roteamento multi-especialistas, fallback automático entre LLMs, persistência em SQLite e observabilidade estruturada.
 
-## 🚀 Tecnologias Utilizadas
-* **Linguagem:** Python
-* **Interface:** Streamlit
-* **Integração LLM:** OpenRouter API (Claude 3.5 Sonnet, DeepSeek, Qwen)
-* **Arquitetura:** Multi-Agent Routing com Fallback automático.
+---
 
-## ⚙️ Funcionalidades Atuais
-- [x] **Roteamento Inteligente:** Atualização automática para as versões mais recentes das LLMs no mercado.
-- [x] **Segurança Human-in-the-Loop:** Interceptação visual de comandos de terminal. A IA precisa justificar a ação e pedir permissão antes de executar comandos no sistema do usuário.
-- [x] **Manipulação de Arquivos:** Leitura nativa de PDFs, planilhas (Excel/CSV) e escrita autônoma de código no workspace.
-- [x] **Stateful Memory:** Histórico de conversas persistente em JSON com capacidade de "Save State" (edição de mensagens com rollback de memória do agente).
+## 🏗️ Arquitetura (6 Camadas)
 
-## 🔒 Como rodar localmente
-1. Clone este repositório.
-2. Crie um ambiente virtual: `python -m venv venv` e ative-o.
-3. Instale as dependências: `pip install streamlit openai requests PyPDF2 pandas openpyxl`
-4. Crie um arquivo `.env` na raiz e adicione sua chave: `OPENROUTER_API_KEY=sua_chave_aqui`
-5. Execute: `streamlit run app.py`
+1. **Interface (`frontend/index.html`):** HUD 3D construído com Three.js e TailwindCSS, desacoplado do backend, com telemetria em tempo real e controle de voz.
+2. **Backend & Segurança (`server_axel.py`):** Gateway FastAPI com validação Pydantic, sanitização de uploads (limite de 10 MB) e exposição estática restrita apenas a `/audio/`.
+3. **Orquestração (`core/agent.py`):** Motor *Bionic* com loop controlado (máximo 8 passos), aprovação humana (*Human-in-the-Loop*) para terminal, proteção contra *Path Traversal*, bloqueio de `.env` e validação de sintaxe Python (`ast.parse`) antes de gravar código.
+4. **Modelos (Multi-LLM Fallback):** Cascata automática **OpenRouter Principal → OpenRouter Gratuito → Ollama Local (`qwen2.5:3b`)** em caso de falta de créditos (`402`), rate limit (`429`) ou queda de internet.
+5. **Memória & Dados (`core/database.py`):** Banco **SQLite (`axel_memory.db`)** para histórico persistente por sessão e indexação/busca por relevância das notas de `memoria_obsidian/`.
+6. **Observabilidade (`core/logger.py`):** Logs estruturados em JSON Lines (`logs/axel_events.jsonl`) registrando latência, consumo de tokens, fallbacks e bloqueios de segurança, auditáveis via `/api/logs`.
+
+---
+
+## 📂 Estrutura do Projeto
+
+```text
+Axel-IA/
+├── core/
+│   ├── agent.py             # Motor Bionic (AppSec, AST check, Fallback Multi-LLM)
+│   ├── database.py          # Persistência SQLite (histórico + busca de memórias)
+│   └── logger.py            # Observabilidade estruturada (JSONL)
+├── frontend/
+│   └── index.html           # Interface HUD 3D (Three.js + TailwindCSS)
+├── logs/                    # Logs auditáveis em JSONL (ignorado no Git)
+├── memoria_obsidian/        # Notas pessoais em Markdown (ignorado no Git)
+├── workspace/               # Uploads e pasta audio/ (ignorado no Git)
+├── personas.py              # Squad de 8 especialistas + Router Neural
+├── server_axel.py           # Backend FastAPI, Whisper local e TTS híbrido
+├── requirements.txt         # Dependências travadas do projeto
+├── .env.example             # Template seguro de variáveis de ambiente
+├── .gitignore               # Blindagem contra vazamento de segredos e dados
+└── README.md                # Documentação do projeto
+
+🚀 Instalação e Execução
+1. Crie e ative o ambiente virtual (Windows PowerShell)
+PowerShell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+2. Instale as dependências
+PowerShell
+pip install -r requirements.txt
+3. Configure o ambiente
+Copie o .env.example para .env e preencha sua chave da OpenRouter:
+
+PowerShell
+copy .env.example .env
+4. Inicie o servidor
+PowerShell
+uvicorn server_axel:app --reload
+🌐 Rotas Principais
+GET / — Interface HUD 3D do Axel.
+
+POST /api/chat — Envia comandos ao orquestrador multi-especialistas.
+
+GET /api/history — Consulta o histórico persistido no SQLite.
+
+GET /api/logs — Auditoria de eventos, latência, tokens e bloqueios AppSec.
+
+GET /api/telemetry — Telemetria de hardware (CPU, RAM, GPU).
+
+---
+
