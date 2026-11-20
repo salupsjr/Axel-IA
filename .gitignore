@@ -31,4 +31,6 @@ __pycache__/
 # IDE e Sistema Operacional
 .vscode/
 .DS_Store
-Thumbs.db
+Thumbs.
+
+.pytest_cache/
