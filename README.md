@@ -1,5 +1,7 @@
 # 🧠 AXEL // 3D Command Center
 
+[![AXEL CI - AppSec & Core Tests](https://github.com/salupsjr/Axel-IA/actions/workflows/ci.yml/badge.svg)](https://github.com/salupsjr/Axel-IA/actions/workflows/ci.yml)
+
 O **AXEL** é um assistente de Inteligência Artificial autônomo, híbrido (Online/Offline) e blindado (AppSec), equipado com interface HUD 3D interativa, roteamento multi-especialistas, fallback automático entre LLMs, persistência em SQLite e observabilidade estruturada.
 
 ---
