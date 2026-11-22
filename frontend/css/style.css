@@ -1,0 +1,78 @@
+body {
+    background-color: #02050c;
+    color: #e2e8f0;
+    font-family: 'JetBrains Mono', monospace;
+    background-image:
+        radial-gradient(circle at 50% 50%, rgba(14, 116, 244, 0.18) 0%, transparent 65%),
+        linear-gradient(rgba(56, 189, 248, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 189, 248, 0.025) 1px, transparent 1px);
+    background-size: 100% 100%, 36px 36px, 36px 36px;
+}
+
+.orbitron {
+    font-family: 'Orbitron', sans-serif;
+}
+
+.hud-glass {
+    background: rgba(5, 12, 26, 0.82);
+    border: 1px solid rgba(56, 189, 248, 0.22);
+    box-shadow: 0 0 18px rgba(14, 165, 233, 0.06);
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* No Desktop mantém o efeito Ghost; no Mobile/Tablet fica sempre legível */
+@media (min-width: 1024px) {
+    .hud-ghost {
+        opacity: 0.12;
+        backdrop-filter: blur(0px);
+        transition: opacity 0.4s ease, transform 0.3s ease, backdrop-filter 0.4s ease;
+    }
+    .hud-ghost:hover,
+    .hud-ghost:focus-within {
+        opacity: 1 !important;
+        backdrop-filter: blur(12px);
+    }
+}
+
+@media (max-width: 1023px) {
+    .hud-ghost {
+        opacity: 0.96;
+        backdrop-filter: blur(10px);
+    }
+}
+
+.agent-card:hover,
+.agent-active {
+    border-color: #38bdf8 !important;
+    box-shadow: 0 0 22px rgba(56, 189, 248, 0.45), inset 0 0 12px rgba(14, 165, 233, 0.2);
+    transform: translateY(-2px);
+}
+
+.pulse-dot {
+    width: 6px;
+    height: 6px;
+    background: #38bdf8;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 8px #38bdf8;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.chat-minimized #chatBox {
+    display: none;
+}
+
+::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #38bdf844;
+    border-radius: 4px;
+}

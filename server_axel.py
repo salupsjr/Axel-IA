@@ -60,6 +60,8 @@ app = FastAPI(title="AXEL 3D Command Center")
 # AppSec: Expõe APENAS a pasta de áudios, nunca os documentos da workspace
 app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
 
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
+
 agent = BionicAgent(workspace_path=WORKSPACE_DIR, api_key=API_KEY)
 
 
