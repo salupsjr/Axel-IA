@@ -26,6 +26,7 @@ from core.database import (
     contar_memorias,
 )
 from personas import SQUAD, ROUTER_PROMPT
+from core.rag_ocr import indexar_documento_rag
 
 try:
     from faster_whisper import WhisperModel
@@ -57,9 +58,8 @@ sincronizar_obsidian_para_db(MEMORIA_DIR)
 
 app = FastAPI(title="AXEL 3D Command Center")
 
-# AppSec: Expõe APENAS a pasta de áudios, nunca os documentos da workspace
+# AppSec: Expõe APENAS a pasta de áudios e o frontend estático
 app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
-
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 agent = BionicAgent(workspace_path=WORKSPACE_DIR, api_key=API_KEY)
@@ -191,8 +191,24 @@ async def upload_arquivo_workspace(file: UploadFile = File(...)):
     caminho_destino = os.path.join(WORKSPACE_DIR, nome_seguro)
     with open(caminho_destino, "wb") as buffer:
         buffer.write(conteudo)
-    registrar_evento("file_upload", detalhes={"filename": nome_seguro, "bytes": len(conteudo)})
-    return {"status": "ok", "filename": nome_seguro}
+
+    resultado_rag = indexar_documento_rag(caminho_destino, nome_seguro)
+
+    registrar_evento(
+        "file_upload",
+        detalhes={
+            "filename": nome_seguro,
+            "bytes": len(conteudo),
+            "rag_chunks": resultado_rag["chunks"],
+            "metodo": resultado_rag["metodo"],
+        }
+    )
+    return {
+        "status": "ok",
+        "filename": nome_seguro,
+        "rag_chunks": resultado_rag["chunks"],
+        "metodo": resultado_rag["metodo"],
+    }
 
 
 @app.post("/api/transcribe")
@@ -246,20 +262,25 @@ async def processar_comando(req: ChatRequest):
             especialista_ativo = "AXEL_CORE"
 
     base_prompt = SQUAD.get(especialista_ativo, SQUAD["AXEL_CORE"])
-    memoria = buscar_memorias_relevantes(req.prompt, limite=3)
+    memoria = buscar_memorias_relevantes(req.prompt, limite=6)
 
-    instrucoes_extras = ""
+    instrucoes_extras = (
+        "\n\nREGRA DE OURO (RAG): Os trechos em 'Memória Relevante' abaixo já foram extraídos "
+        "da sua memória e dos PDFs/documentos anexados. Responda DIRETAMENTE usando essas informações. "
+        "NUNCA tente rodar comandos de terminal (ls, dir, python) ou abrir arquivos .pdf no disco "
+        "para responder perguntas sobre documentos que já estão no contexto abaixo."
+    )
     if req.modo_foco:
         instrucoes_extras += "\n\n🎯 MODO FOCO ATIVADO: Fatie a solução! Dê APENAS o Passo 1. Recuse-se a dar o Passo 2 até confirmação."
 
     if req.conclave:
-        sys_prompt = f"MODO MEGA-BRAIN CONCLAVE ATIVO.\n1. [{especialista_ativo}]: Solução.\n2. [CRÍTICO]: Riscos.\n3. [VEREDITO]: Ação imediata.\n{instrucoes_extras}\nMemória Relevante:\n{memoria}"
+        sys_prompt = f"MODO MEGA-BRAIN CONCLAVE ATIVO.\n1. [{especialista_ativo}]: Solução.\n2. [CRÍTICO]: Riscos.\n3. [VEREDITO]: Ação imediata.\n{instrucoes_extras}\n\nMemória Relevante (RAG):\n{memoria}"
     else:
-        sys_prompt = f"Você é o Axel, um assistente IA. Seu criador é o Jr (Salustiano Souza Pires Junior). Nunca se refira a si mesmo como Jr.\n{base_prompt}{instrucoes_extras}\nMemória Relevante do Jr:\n{memoria}"
+        sys_prompt = f"Você é o Axel, um assistente IA. Seu criador é o Jr (Salustiano Souza Pires Junior). Nunca se refira a si mesmo como Jr.\n{base_prompt}{instrucoes_extras}\n\nMemória Relevante do Jr (RAG):\n{memoria}"
 
     agent.history = [{"role": "system", "content": sys_prompt}]
 
-    # Carrega o histórico persistido no SQLite (sobrevive ao F5)
+    # Carrega o histórico persistido no banco (sobrevive ao F5)
     historico_db = buscar_historico(req.session_id, limite=10)
     for msg in historico_db:
         agent.history.append({

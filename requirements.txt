@@ -25,3 +25,7 @@ pywin32>=306; sys_platform == "win32"
 
 # Banco de dados nuvem
 supabase
+
+# Leitura de PDF
+pypdf
+pymupdf

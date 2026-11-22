@@ -275,7 +275,7 @@ if (wCanvas) {
     drawWave();
 }
 
-// === 4. CONSOLE, MEMÓRIA E HISTÓRICO DO SUPABASE ===
+// === 4. CONSOLE, MEMÓRIA, UPLOAD RAG E HISTÓRICO ===
 function minimizarConsole() {
     const w = document.getElementById('chatWrapper');
     w.classList.toggle('chat-minimized');
@@ -308,10 +308,25 @@ async function salvarMemoria() {
 async function enviarArquivoWorkspace() {
     const f = document.getElementById('fileInput');
     if (!f.files.length) return;
+    const arquivo = f.files[0];
+    const chatBox = document.getElementById('chatBox');
+    chatBox.innerHTML += `<div class="text-xs text-amber-300 bg-amber-950/30 p-2 rounded">⏳ Lendo e vetorizando <b>${arquivo.name}</b> no RAG (PDF escaneado usa OCR por visão)...</div>`;
+    chatBox.scrollTop = chatBox.scrollHeight;
+
     const formData = new FormData();
-    formData.append('file', f.files[0]);
-    await fetch('/api/upload', { method: 'POST', body: formData });
-    document.getElementById('chatBox').innerHTML += `<div class="text-xs text-sky-300 bg-sky-950/40 p-2 rounded">📎 Arquivo anexado na workspace!</div>`;
+    formData.append('file', arquivo);
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        const extra = data.rag_chunks
+            ? ` e indexado no RAG (<b>${data.rag_chunks} blocos</b> via <code>${data.metodo}</code>)!`
+            : ' na workspace (sem texto extraído).';
+        chatBox.innerHTML += `<div class="text-xs text-emerald-300 bg-emerald-950/40 p-2 rounded">📎 <b>${data.filename || arquivo.name}</b> anexado${extra}</div>`;
+    } catch (e) {
+        chatBox.innerHTML += `<div class="text-xs text-rose-300 bg-rose-950/40 p-2 rounded">❌ Erro ao enviar o arquivo.</div>`;
+    }
+    f.value = '';
+    chatBox.scrollTop = chatBox.scrollHeight;
 }
 
 let agenteAtual = 'AUTO';
