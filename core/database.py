@@ -11,8 +11,16 @@ try:
 except ImportError:
     create_client = None
 
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+
 DB_PATH = os.path.join(os.getcwd(), "axel_memory.db")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "openai/text-embedding-3-small")
+
 _supabase_client = None
+_embed_client = None
 
 
 def _get_supabase():
@@ -32,6 +40,42 @@ def _get_supabase():
             print(f"[DB WARN] Falha ao iniciar Supabase, usando SQLite local: {e}")
             return None
     return _supabase_client
+
+
+def _get_embed_client():
+    """Cliente OpenAI/OpenRouter para gerar vetores de 1536 dimensões."""
+    global _embed_client
+    if os.getenv("PYTEST_CURRENT_TEST") or OpenAI is None:
+        return None
+    if _embed_client is not None:
+        return _embed_client
+
+    api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    base_url = "https://openrouter.ai/api/v1" if os.getenv("OPENROUTER_API_KEY") else None
+    try:
+        _embed_client = OpenAI(api_key=api_key, base_url=base_url)
+    except Exception:
+        return None
+    return _embed_client
+
+
+def gerar_embedding(texto: str):
+    """Gera embedding vetorial (1536 dims). Retorna None se offline ou em teste."""
+    client = _get_embed_client()
+    if not client or not texto or not texto.strip():
+        return None
+    try:
+        resp = client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=texto[:8000]
+        )
+        return resp.data[0].embedding
+    except Exception as e:
+        print(f"[RAG WARN] Falha ao gerar embedding (usando fallback por palavras): {e}")
+        return None
 
 
 def _get_conn():
@@ -69,7 +113,6 @@ def init_db():
 def salvar_mensagem(session_id: str, role: str, content: str, especialista: str = None, modelo: str = None):
     agora = datetime.now().isoformat()
 
-    # 1. Sempre salva no SQLite local (cache/offline)
     with _get_conn() as conn:
         conn.execute(
             "INSERT INTO messages (session_id, role, content, especialista, modelo, created_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -77,7 +120,6 @@ def salvar_mensagem(session_id: str, role: str, content: str, especialista: str 
         )
         conn.commit()
 
-    # 2. Sincroniza com o Supabase se estiver online
     sb = _get_supabase()
     if sb:
         try:
@@ -134,10 +176,11 @@ def salvar_memoria_db(titulo: str, conteudo: str, arquivo: str):
     sb = _get_supabase()
     if sb:
         try:
-            sb.table("memories").upsert(
-                {"titulo": titulo, "conteudo": conteudo, "arquivo": arquivo},
-                on_conflict="arquivo"
-            ).execute()
+            payload = {"titulo": titulo, "conteudo": conteudo, "arquivo": arquivo}
+            vetor = gerar_embedding(f"{titulo}\n{conteudo}")
+            if vetor:
+                payload["embedding"] = vetor
+            sb.table("memories").upsert(payload, on_conflict="arquivo").execute()
         except Exception as e:
             print(f"[SUPABASE WARN] Falha ao sincronizar memória na nuvem: {e}")
 
@@ -158,8 +201,30 @@ def sincronizar_obsidian_para_db(memoria_dir: str):
 
 
 def buscar_memorias_relevantes(query: str, limite: int = 3) -> str:
-    rows = []
+    # 1. Tenta Busca Semântica Vetorial (RAG pgvector no Supabase)
     sb = _get_supabase()
+    if sb and query:
+        vetor_query = gerar_embedding(query)
+        if vetor_query:
+            try:
+                res = sb.rpc(
+                    "match_memories",
+                    {
+                        "query_embedding": vetor_query,
+                        "match_threshold": 0.30,
+                        "match_count": limite
+                    }
+                ).execute()
+                if res.data:
+                    return "\n\n---\n\n".join(
+                        f"[{r['arquivo']} | score: {r['similarity']:.2f}]\n{r['conteudo']}"
+                        for r in res.data
+                    )
+            except Exception as e:
+                print(f"[RAG WARN] Falha na busca vetorial, usando fallback por palavras: {e}")
+
+    # 2. Fallback por palavras-chave (Supabase ou SQLite local)
+    rows = []
     if sb:
         try:
             res = sb.table("memories").select("titulo, conteudo, arquivo").execute()
