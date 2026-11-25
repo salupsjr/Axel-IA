@@ -275,7 +275,7 @@ if (wCanvas) {
     drawWave();
 }
 
-// === 4. CONSOLE, MEMÓRIA, UPLOAD RAG E HISTÓRICO ===
+// === 4. CONSOLE, MEMÓRIA, UPLOAD RAG, PERMISSÕES (PIN/ALERTA) E HISTÓRICO ===
 function minimizarConsole() {
     const w = document.getElementById('chatWrapper');
     w.classList.toggle('chat-minimized');
@@ -341,12 +341,67 @@ function selecionarAgente(codigo, el, fecharMenu = false) {
     if (fecharMenu) toggleMenuMobile(false);
 }
 
+function renderizarCardPermissao(data) {
+    const chatBox = document.getElementById('chatBox');
+    const cardId = `perm_${data.tool_call_id || Date.now()}`;
+    const antigo = document.getElementById(cardId);
+    if (antigo) antigo.remove();
+
+    const risco = (data.risco || 'MEDIO').toUpperCase();
+    const exigePin = Boolean(data.exige_pin);
+    const alertaVermelho = Boolean(data.alerta_vermelho || exigePin || risco === 'CRITICO');
+    const alertasPi = Array.isArray(data.alertas_seguranca) ? data.alertas_seguranca : [];
+
+    const classeBase = alertaVermelho
+        ? 'alerta-vermelho-piscante text-rose-100'
+        : 'bg-amber-950/80 border border-amber-400/50 text-amber-100';
+
+    const tituloAlerta = alertasPi.length > 0
+        ? '🚨 ALERTA DE PROMPT INJECTION / SEGURANÇA'
+        : (alertaVermelho ? '🚨 ÁREA CRÍTICA — PIN DE 4 DÍGITOS EXIGIDO' : '⚠️ PEDIDO DE AUTORIZAÇÃO');
+
+    const explicacao = data.explicacao || data.justificativa || 'O Axel solicitou permissão para executar esta ação.';
+    const alvo = data.path || data.command || 'recuperado_da_ram';
+    const cmdCodificado = encodeURIComponent(data.command || 'recuperado_da_ram');
+
+    const pinHtml = exigePin ? `
+        <div class="mt-2 space-y-1">
+            <label class="block text-[11px] font-bold text-rose-200">Digite o PIN de 4 dígitos:</label>
+            <input id="pin_${data.tool_call_id}" type="password" maxlength="4" inputmode="numeric" placeholder="••••"
+                class="w-28 bg-slate-950 border border-rose-300 rounded px-2 py-1 text-xs text-white tracking-widest text-center focus:outline-none">
+            ${data.erro_pin ? `<div class="text-[11px] text-rose-200 font-bold">${data.erro_pin}</div>` : ''}
+        </div>
+    ` : '';
+
+    const piHtml = alertasPi.length > 0
+        ? `<div class="mt-1 text-[11px] text-rose-200"><b>Sinais suspeitos:</b> <code>${alertasPi.join(', ')}</code></div>`
+        : '';
+
+    chatBox.innerHTML += `
+        <div id="${cardId}" class="text-xs p-3 rounded-lg space-y-1.5 ${classeBase}">
+            <div class="flex items-center justify-between gap-2">
+                <b class="orbitron text-[11px]">${tituloAlerta}</b>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-black/40 border border-white/20">RISCO: ${risco}</span>
+            </div>
+            <div>${explicacao}</div>
+            <div class="text-[11px] opacity-90"><b>Alvo/Comando:</b> <code>${alvo}</code></div>
+            ${piHtml}
+            ${pinHtml}
+            <div class="flex gap-2 pt-1">
+                <button onclick="aprovar('${data.tool_call_id}', decodeURIComponent('${cmdCodificado}'), true, ${exigePin})" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-2.5 py-1 rounded text-[11px]">✅ Autorizar</button>
+                <button onclick="aprovar('${data.tool_call_id}', decodeURIComponent('${cmdCodificado}'), false, false)" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-2.5 py-1 rounded text-[11px]">❌ Bloquear</button>
+            </div>
+        </div>
+    `;
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
 async function carregarHistoricoNuvem() {
     try {
         const res = await fetch('/api/history?session_id=default&limite=12');
         if (!res.ok) return;
         const data = await res.json();
-        const mensagens = data.historico || data || [];
+        const mensagens = data.historico || data.messages || data || [];
         if (!Array.isArray(mensagens) || mensagens.length === 0) return;
 
         const chatBox = document.getElementById('chatBox');
@@ -405,7 +460,7 @@ async function enviarComando() {
         restaurarVisuais();
 
         if (data.status === "permissao_pendente") {
-            chatBox.innerHTML += `<div class="text-xs bg-amber-950/70 p-3 rounded"><b>⚠️ PERMISSÃO:</b><br><code>${data.command}</code><br><button onclick="aprovar('${data.tool_call_id}', true)" class="bg-sky-500 text-black px-2 py-1 rounded mt-2">✅ Autorizar</button> <button onclick="aprovar('${data.tool_call_id}', false)" class="bg-rose-500 text-white px-2 py-1 rounded mt-2">❌ Bloquear</button></div>`;
+            renderizarCardPermissao(data);
         } else {
             const badge = data.is_offline ? `<span class="bg-purple-600 text-white px-1 rounded">LOCAL MODE</span>` : "";
             const especialista_ativo = data.especialista_real || agenteAtual;
@@ -425,14 +480,42 @@ async function enviarComando() {
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-async function aprovar(id, ok) {
+async function aprovar(id, command, ok, exigePin = false) {
+    let pin = "";
+    if (ok && exigePin) {
+        const pinEl = document.getElementById(`pin_${id}`);
+        pin = pinEl ? pinEl.value.trim() : "";
+        if (!/^\d{4}$/.test(pin)) {
+            alert("Digite o PIN numérico de 4 dígitos para autorizar esta ação crítica.");
+            if (pinEl) pinEl.focus();
+            return;
+        }
+    }
+
     const res = await fetch('/api/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tool_call_id: id, command: "recuperado_da_ram", approved: ok })
+        body: JSON.stringify({
+            tool_call_id: id,
+            command: command || "recuperado_da_ram",
+            approved: ok,
+            pin: ok ? pin : ""
+        })
     });
     const data = await res.json();
-    document.getElementById('chatBox').innerHTML += `<div class="text-xs text-sky-200 bg-slate-900 p-2 rounded">${marked.parse(data.resposta || 'Concluído.')}</div>`;
+    const chatBox = document.getElementById('chatBox');
+
+    if (data.status === "permissao_pendente") {
+        renderizarCardPermissao(data);
+        return;
+    }
+
+    const cardAntigo = document.getElementById(`perm_${id}`);
+    if (cardAntigo) cardAntigo.remove();
+
+    chatBox.innerHTML += `<div class="text-xs text-sky-200 bg-slate-900 p-2 rounded">${marked.parse(data.resposta || 'Concluído.')}</div>`;
+    if (data.audio_url) { player.src = data.audio_url; player.play(); }
+    chatBox.scrollTop = chatBox.scrollHeight;
 }
 
 // === 5. TELEMETRIA ===

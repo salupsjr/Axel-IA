@@ -9,6 +9,23 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        @keyframes axelRedBlink {
+            0%, 100% {
+                box-shadow: 0 0 12px rgba(239, 68, 68, 0.55), inset 0 0 12px rgba(239, 68, 68, 0.2);
+                border-color: rgba(248, 113, 113, 0.95);
+            }
+            50% {
+                box-shadow: 0 0 34px rgba(239, 68, 68, 1), inset 0 0 22px rgba(220, 38, 38, 0.45);
+                border-color: rgba(254, 202, 202, 1);
+            }
+        }
+        .alerta-vermelho-piscante {
+            background: rgba(69, 10, 10, 0.95) !important;
+            border: 2px solid #ef4444 !important;
+            animation: axelRedBlink 0.75s infinite;
+        }
+    </style>
 </head>
 <body class="h-[100dvh] w-screen p-2 lg:p-4 flex flex-col justify-between select-none relative overflow-hidden">
 

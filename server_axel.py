@@ -79,6 +79,7 @@ class ApprovalRequest(BaseModel):
     tool_call_id: str = Field(..., min_length=1, max_length=100)
     command: str = Field(default="", max_length=1000)
     approved: bool
+    pin: str = Field(default="", max_length=16)
 
 
 class MemoryRequest(BaseModel):
@@ -350,4 +351,4 @@ async def processar_comando(req: ChatRequest):
 
 @app.post("/api/approve")
 async def aprovar_comando(req: ApprovalRequest):
-    return agent.aprovar_comando(req.tool_call_id, req.command, req.approved)
+    return agent.aprovar_comando(req.tool_call_id, req.command, req.approved, pin=req.pin)
